@@ -1,0 +1,281 @@
+---
+title: "Small Worlds and Large Worlds"
+output: html_notebook
+---
+
+## 2.1 The garden of forking data
+
+Bayesian inference is really just counting and comparing possibilities
+
+  - Need to consider everything that could have happened (all forking paths)
+  - Alternative sequences of events are cultivated and then compared to what happened
+    - events that don't match are pruned
+  
+### 2.1.1 Counting possibilities
+
+Toy example:
+
+Picking blue and white marbles from a bag. In total there are four marbels but we
+don't know how many are of each color. Five total possibilities:
+
+  - 4w0b
+  - 3w1b
+  - 2w2b
+  - 1w3b
+  - 0w4b
+ 
+We can call these possibilities *conjectures*. Goal is to find the conjecture that
+is most plausible given some evidence - in this case a sequence of 3 marbles that
+were pulled out of the bag.
+
+Say we pick three marbles with replacement and observe **b-w-b** in this order.
+We can visualize the possibilities branching outward as below:
+
+
+```{r}
+library(DiagrammeR)
+
+# Create branching possibilities diagram for first pick
+n = 5
+node_df <- create_node_df(
+  n = n,
+  label="",
+  style = c('invisible', rep('filled', n-1)),
+  color = 'black',
+  fillcolor = c(NA, 'blue', 'white', 'white', 'white'),
+  shape = 'circle',
+)
+
+edge_df <- create_edge_df(
+  from = c(1, 1, 1, 1),
+  to = c(2, 3, 4, 5),
+  arrowhead='none',
+  color='black'
+)
+
+graph <- create_graph(
+  nodes_df = node_df,
+  edges_df = edge_df,
+  attr_theme='bt'
+) 
+
+graph |> DiagrammeR::render_graph()
+
+```
+
+```{r}
+library(DiagrammeR)
+
+# Create branching possibilities diagram for second pick
+n = 21
+node_df <- create_node_df(
+  n = n,
+  label="",
+  style = c('invisible', rep('filled', n-1)),
+  color = 'black',
+  fillcolor = c('black', rep(c('blue', 'white', 'white', 'white'), 5)),
+  shape = 'circle',
+)
+
+edge_df <- create_edge_df(
+  from = c(rep(1, 4), rep(2, 4), rep(3, 4),rep(4,4), rep(5,4)),
+  to = 2:n,
+  arrowhead='none',
+  color='black'
+)
+
+graph <- create_graph(
+  nodes_df = node_df,
+  edges_df = edge_df,
+  attr_theme='bt'
+) 
+
+graph |> render_graph()
+```
+
+```{r}
+# Create branching possibilities diagram for all three pickes
+n = 64+20+1
+node_df <- create_node_df(
+  n = n,
+  label="",
+  style = c('invisible', rep('filled', n-1)),
+  color = 'black',
+  fillcolor = c('black', rep(c('blue', 'white', 'white', 'white'), (n-1)/4)),
+  shape = 'circle',
+  fontcolor='black'
+)
+
+edge_df <- create_edge_df(
+  from = rep(1:((n-1)/4), each=4),
+  to = 2:n,
+  arrowhead='none',
+  color='black'
+)
+
+graph <- create_graph(
+  nodes_df = node_df,
+  edges_df = edge_df,
+  attr_theme='bt'
+) 
+
+graph |> render_graph()
+```
+
+In all there are 4^3 = 64 different branches or possible paths. If we follow the paths there are
+3 paths that can give us a draw of **b-w-b** assuming the bag has 3w1b.
+
+```{r}
+n = 64+20+1
+node_df <- create_node_df(
+  n = n,
+  label="",
+  style = c('invisible', rep('filled', n-1)),
+  color = 'black',
+  fillcolor = c('black', rep(c('blue', 'white', 'white', 'white'), (n-1)/4)),
+  # penwidth = c(2, 1, 1, 1, 1, 2, 2, 2, rep(1, 16), 2, 1, 1, 1, 2, 1, 1, 1, 
+  #              2,rep(1, 12*4 + 3)),
+  shape = 'circle',
+  fontcolor='black'
+)
+
+edge_df <- create_edge_df(
+  from = rep(1:((n-1)/4), each=4),
+  to = 2:n,
+  arrowhead='none',
+  color=c('black', rep('grey', 4), rep('black', 3), rep('grey', 16),
+          rep(c('black', rep('grey', 3)), 3), rep('grey', 12*4)),
+  penwidth = c(10, rep(1, 4), rep(10, 3), rep(1, 16),
+          rep(c(10, rep(1, 3)), 3), rep(1, 12*4))
+)
+
+graph <- create_graph(
+  nodes_df = node_df,
+  edges_df = edge_df,
+  attr_theme='bt'
+) 
+
+graph |> render_graph()
+```
+
+Inferential power comes from comparing this count (3/64) to the number of ways each of the other
+conjectures of the bag's contents could produce the same data. We can do the same for each conjecture and get the following counts
+
+```{r, layout="l-body-outset"}
+library(knitr)
+
+df <- data.frame(
+  Conjecture = c("[W-W-W-W]",
+                   "[B-W-W-W]",
+                   "[B-B-W-W]",
+                   "[B-B-B-W]",
+                   "[B-B-B-B]"),
+  `Ways to produce B-W-B` = c("0 x 4 x 0 = 0",
+                              "1 x 3 x 1 = 3",
+                              "2 x 2 x 2 = 8",
+                              "3 x 1 x 3 = 9",
+                              "4 x 0 x 4 = 0")
+)
+
+df
+```
+
+### 2.1.2 Combining other information
+
+When new data becomes available - updated counts can be calculated by multiplying the prior counts with the number of ways each conjecture could produce the new observation.
+
+  - e.g. say we pick another marble and it is blue, the new count for the conjecture 1w3b is (3x1x3)x3=27 
+  - still works if new data is not the same type of data
+    - Say factory lets you know that the ratio for the conjectures 3b1w:2b2w:1b3w is 1:2:3 then you could just multiply the prior count by this new information
+    
+```{r}
+df <- data.frame(
+  Conjecture = c("[W-W-W-W]",
+                   "[B-W-W-W]",
+                   "[B-B-W-W]",
+                   "[B-B-B-W]",
+                   "[B-B-B-B]"),
+  `Ways to produce B` = c(0, 1, 2, 3, 4),
+  `Prior counts` = c("0 x 4 x 0 = 0",
+                              "1 x 3 x 1 = 3",
+                              "2 x 2 x 2 = 8",
+                              "3 x 1 x 3 = 9",
+                              "4 x 0 x 4 = 0"),
+  `New count` = c('0 x 0 = 0',
+                  '3 x 1 = 3',
+                  '8 x 2 = 16',
+                  '9 x 3 = 27',
+                  '0 x 4 = 0')
+)
+
+df
+```
+
+
+```{r}
+df <- data.frame(
+  Conjecture = c("[W-W-W-W]",
+                   "[B-W-W-W]",
+                   "[B-B-W-W]",
+                   "[B-B-B-W]",
+                   "[B-B-B-B]"),
+  Ways_to_produce_B = c(0, 1, 2, 3, 4),
+  Prior_count = c("0 x 4 x 0 x 0 = 0",
+                              "1 x 3 x 1 x 1 = 3",
+                              "2 x 2 x 2 x 2 = 16",
+                              "3 x 1 x 3 x 3 = 27",
+                              "4 x 0 x 4 x 4 = 0"),
+  Factory_count = c(0, 3, 2, 1, 0),
+  New_count = c('0 x 0 = 0',
+                  '3 x 3 = 9',
+                  '16 x 2 = 32',
+                  '27 x 1 = 27',
+                  '0 x 4 = 0')
+)
+
+df
+```
+
+### 2.1.3 From counts to probability
+
+Mathematical way to formulate garden of forking data:
+
+  - If $p$ is the proportion of marbles that are blue (so that 1b3w = 0.25)
+  - and $D_{new}$ is the new data (e.g. B-W-B)
+  - Then:
+  
+$$\text{plausibility of } p \text{ after }D_{new} \propto \text{ways } p \text{ can produce } D_{new} * \text{prior plausibility of } p$$
+
+You can then convert these counts to probabilities by dividing by the sum of products
+
+$$\text{plausibility of } p \text{ after }D_{new} = \frac{\text{ways } p \text{ can produce } D_{new} * \text{prior plausibility of } p}{\text{sum of products}}$$
+For example:
+
+```{r}
+# Make Table
+df <- data.frame(
+  Conjecture = c("[W-W-W-W]",
+                   "[B-W-W-W]",
+                   "[B-B-W-W]",
+                   "[B-B-B-W]",
+                   "[B-B-B-B]"),
+  p = c(0, 0.25, 0.5, 0.75, 1),
+  Ways_to_produce_data = c(0, 3, 8, 9, 0),
+  Plausibility = c(0, 0.15, 0.40, 0.45, 0)
+
+)
+
+# Calculate probability
+
+ways = c(0, 3, 8, 9, 0)
+print(ways/sum(ways))
+
+df
+```
+
+Each of these peices has a direct partner in applied probability theory:
+
+  - A conjectured proportion, $p$, is usually called a **PARAMETER** value
+  - The relative number of ways that a value $p$ can produce the data is usually called a **LIKELIHOOD**
+  - The prior plausibility of any specific $p$ is usually called the **PRIOR PROBABILITY**
+  - The new, updated plausibility of any specific $p$ is usually called the **POSTERIOR PROBABILITY**
